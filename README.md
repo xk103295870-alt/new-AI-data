@@ -1,191 +1,125 @@
 # AI Data Agent
 
-A Vue 3 + FastAPI application for asking business questions about an explicitly authorized MySQL datasource. The backend uses an OpenAI-compatible model with tool calling, validates candidate SQL, executes read-only queries, and generates charts from actual query results.
+> Ask your business data questions in plain language. Get charts, answers, and explanations — safely.
+**AI Data Agent** is a private-deployable, conversational AI data-analysis assistant. It lets non-technical teams query, analyze, and visualize their own enterprise databases through natural language — without writing SQL, and without giving a model free rein over the database.
 
-## Features and scope
+The core idea: **trusted data access + AI analysis orchestration + business semantics + visualization**. Not a rebuild of drag-and-drop BI, and not a model with unrestricted database access.
 
-- Natural-language questions and follow-up conversations.
-- Explicit table/view and column allowlists; single-table, read-only SQL validation.
-- TLS certificate and hostname verification for MySQL.
-- Query deadlines, bounded connection pools, row and result-size limits.
-- Server-generated line, bar, pie, table and metric displays. The model cannot supply chart datasets or executable chart options.
-- SQLite conversation storage. Charts are not restored when historical conversations are loaded.
+---
 
-This repository is a **deployment-source distribution**. It excludes private spreadsheets, database dumps, credentials, certificates, screenshots, internal reports, interview notes, customer-specific import tools and evaluation fixtures. It does not include a database or model subscription.
+## ✨ Features
 
-The default business terminology is for membership and consumption analysis. Adapting another domain requires reviewing `services/agent/config/business_terms.yaml` and the default terminology/examples in `services/agent/app/agent/business_terms.py`, in addition to configuring the schema allowlist.
+- 🔍 **Natural-language to insight** — ask questions like *"How did member spending trend over the last three months?"* and get a conclusion, a chart, and its data source.
+- 📊 **Automatic visualization** — Apache ECharts charts are selected and generated from query results, annotated with metric definitions and caveats.
+- 💬 **Multi-turn analysis** — follow up to change time ranges, swap dimensions or metrics, or switch chart types; the agent carries context forward.
+- 🧩 **Skills** — reusable domain capabilities (membership RFM, repurchase analysis, format sales…) that package business rules, workflows, and permitted tools.
+- 🔒 **Security by design** — read-only SQL, object whitelists, tenant isolation, resource limits, and full audit logging. The model never holds database credentials.
+- 🏢 **Enterprise integration** — a Java Business Adapter reuses existing identity, tenant, and business APIs from legacy systems; no rewrite required.
+- ☁️ **Model flexibility** — third-party LLM APIs by default, with an open interface for enterprise-chosen providers or local inference.
 
-## Requirements
+---
 
-- Python 3.11+ and [uv](https://docs.astral.sh/uv/).
-- Node.js **24 LTS** and npm for the frontend build.
-- A reachable MySQL 8 instance, your own analysis views, a dedicated read-only account and a trusted TLS CA certificate.
-- An OpenAI-compatible **Chat Completions** endpoint and model supporting `tools` and multi-turn tool results. A plain text-only completion endpoint is insufficient.
+## 🏗️ Architecture
 
-## Local setup
+```mermaid
+flowchart TB
+    UI["UI — Vue 3 + TypeScript<br/>Chat · ECharts · Skills"]
+    CORE["Agent Core — Python FastAPI<br/>Intent · Tool Calling · Context · Schema · ChartSpec"]
+    LLM["LLM Provider<br/>Cloud API / Local"]
+    ADAPTER["Data Adapter Interface<br/>Unified metadata & query API"]
+    STATE["Application State<br/>Sessions · Audit"]
+    JAVA["Java Business Adapter<br/>Identity · Tenant · Business APIs"]
+    DB[("Authorized Data Sources<br/>MySQL → PostgreSQL / API / File")]
+    UI -- "HTTP / SSE" --> CORE
+    CORE --> LLM
+    CORE --> ADAPTER
+    CORE --> STATE
+    ADAPTER --> JAVA
+    ADAPTER --> DB
+```
 
-Clone your repository and install the locked dependencies:
+**Responsibility boundaries**
+
+| Layer | Does | Never does |
+|---|---|---|
+| UI (Vue + ECharts) | Conversation, ChartSpec rendering | Executes SQL, stores credentials |
+| Python Agent Core | Planning, orchestration, multi-turn context | Embeds legacy-system logic |
+| Adapters | Isolate data sources behind one interface | — |
+| LLM Provider | Swappable: cloud API → local inference | Holds database passwords |
+
+---
+
+## 🚀 Quickstart
+
+> ⚠️ Early-stage project. Commands below reflect the target stack — check the repo for the latest setup.
 
 ```bash
+# 1. Clone
 git clone https://github.com/xk103295870-alt/new-AI-data.git
 cd new-AI-data
 
-cd services/agent
-uv sync --frozen --no-dev
-cd ../../apps/web
-npm ci
-cd ../..
-```
+# 2. Backend (Python / FastAPI)
+cd backend
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+# Configure your authorized read-only data source & LLM provider in .env
+uvicorn app.main:app --reload --port 8000
 
-### 1. Configure the backend
-
-```bash
-cp .env.example .env
-chmod 600 .env
-# Edit .env locally. Never commit it.
-```
-
-The backend reads **process environment variables**. Copying an environment file alone does not load it. The commands below explicitly export its values; use shell-compatible quoting, especially for JSON and passwords.
-
-Important settings:
-
-| Variable | Purpose |
-|---|---|
-| `DATASOURCE_ENABLED` | Set `true` after configuring your database. |
-| `DATASOURCE_ID` | Stable datasource identifier, e.g. `demo_mysql`. |
-| `DB_HOST`, `DB_PORT`, `DB_NAME` | MySQL hostname, port and analysis database. |
-| `DB_USER`, `DB_PASSWORD` | Dedicated account with SELECT access only to approved views. |
-| `DB_SSL_ENABLED`, `DB_SSL_CA_PATH` | Use `true` and an absolute path to a trusted CA. The hostname must match the server certificate. |
-| `DB_ALLOWED_OBJECTS_JSON` | Exact object-to-column allowlist. Empty means no authorization. |
-| `LLM_BASE_URL` | Provider base URL, typically ending in `/v1`; do not append `/chat/completions`. |
-| `LLM_API_KEY`, `LLM_MODEL` | Your server-side key and tool-capable model identifier. |
-| `APP_TIMEZONE` | Application timezone; default `Asia/Shanghai`. |
-| `SESSION_DB_PATH` | Writable SQLite path; default `./data/agent_sessions.sqlite3`, relative to the backend working directory. |
-| `BUSINESS_TERMS_PATH` | Default `config/business_terms.yaml`, relative to the backend working directory. |
-
-For the default business examples, create analysis views from **your own data**, then authorize only the columns you intend to expose. For example, if your views expose these fields:
-
-```bash
-DB_ALLOWED_OBJECTS_JSON='{"trade_view":["trade_completed_at","trade_amount","store_no","store_name","district_name","payment_method","format_name","points_added"],"member_view":["gender","points","member_tag","registered_at"]}'
-```
-
-You may authorize a smaller scope matching your views. This JSON does not create tables or grant database permissions: your database administrator must separately configure the views and SELECT grants. Avoid exposing personal identifiers or unrestricted source tables.
-
-Questions, authorized schema and limited query results are sent to your configured LLM provider. Configure only data you are permitted to send to that provider. Keep keys and database credentials on the backend; never use `VITE_*` variables for secrets.
-
-### 2. Start the backend
-
-From the repository root, in a POSIX-compatible shell:
-
-```bash
-set -a
-. ./.env
-set +a
-cd services/agent
-uv run --no-dev uvicorn app.main:app --host 127.0.0.1 --port 8000
-```
-
-### 3. Start the frontend
-
-In another terminal:
-
-```bash
-cd apps/web
+# 3. Frontend (Vue 3)
+cd ../frontend
+npm install
 npm run dev
+
+# 4. Open
+# http://localhost:5173
 ```
 
-Open **http://127.0.0.1:5173/**. Vite proxies `/api` and `/health` to port 8000. Click **Check** to inspect the authorized datasource, then ask a question.
+**Requirements**: Python ≥ 3.10 · Node.js ≥ 18 · an authorized, read-only MySQL data source · an LLM API key (or a local inference endpoint).
 
-Without database/model configuration, the application still starts and `/health` remains available, but analytical chat is unavailable. Health is a process check, not a database or model readiness check.
+---
 
-Example questions, after adapting the views and dates to your data:
+## 🔐 Security Model
 
-> How many transaction records are in the authorized consumption view?
+1. **Least privilege** — real business data stays within authorized scope; test copies or permission-scoped views preferred.
+2. **No credentials in the model** — the model never holds database passwords and cannot bypass the executor; every query is validated server-side.
+3. **Hard tenant isolation** — enforced by trusted identity plus database/view/gateway permissions, never a model-supplied `WHERE` clause.
+4. **Constrained queries** — read-only SQL, object whitelists, scan/time/row limits, and audit logging; SQL AST checks are one layer of many.
+5. **Schema minimization** — sensitive business knowledge is filtered before any third-party model call; masked or aggregated data only.
+6. **Explainable results** — metric definitions, reasoning, sources, and limitations are always shown; the system never fabricates metrics, data, or table structures.
 
-> Show total consumption amount by month from January 1, 2025, inclusive, to April 1, 2025, exclusive. Display a bar chart in chronological order. The currency unit is unconfirmed.
+---
 
-## Server deployment
+## 🗺️ Roadmap
 
-This version has **no built-in user authentication or tenant isolation**. Use a trusted network or an authenticated reverse proxy. Do not expose the backend directly to the public Internet. CORS is not authentication.
+| Phase | Focus | Scope |
+|---|---|---|
+| **1 · MVP / Demo** ✅ *current* | Core loop | Authorized MySQL → schema → NL analysis → safe SQL → charts + basic follow-ups |
+| **2 · Agent & Skills** | Capability | Skill registration/execution, metric dictionary, export & favorites, Java integration |
+| **3 · Private & OSS** | Productization | Identity & permissions, multi-source/tenant, audit, Docker deployment, open-sourcing |
+| **4 · Desktop & Commercial** | Scale | Tauri/Electron packaging, installers, industry customization, paid capabilities |
 
-1. Install backend dependencies with `uv sync --frozen --no-dev`.
-2. Run `npm ci && npm run build` in `apps/web`.
-3. Serve `apps/web/dist` with your web server. Vite's development proxy does **not** exist in the built files.
-4. Proxy `/api/` and `/health` to the backend, retaining their path prefixes. Use HTTPS and access control for the complete site.
-5. Start one backend process under your service manager, using `services/agent` as its working directory. Keep environment files and CA material outside the public web directory.
-6. Give the service account write access to its SQLite data directory. Back up that directory if conversations must survive redeployment.
+---
 
-Example Nginx server body (replace the domain, build path and authentication file; terminate HTTPS on this server or on your ingress):
+## 🤝 Contributing
 
-```nginx
-server {
-    listen 80;
-    server_name analytics.example.com;
-    root /opt/new-ai-data/apps/web/dist;
-    index index.html;
+This project is in early development. Issues, discussions, and pull requests are welcome — especially around:
 
-    auth_basic "Private analytics";
-    auth_basic_user_file /etc/nginx/analytics.htpasswd;
+- New data adapters (PostgreSQL, Excel/CSV, REST APIs)
+- Domain Skills (membership, commerce, property, retail formats)
+- Query-safety hardening and evaluation benchmarks
 
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-    location /api/ {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_read_timeout 180s;
-    }
-    location = /health {
-        proxy_pass http://127.0.0.1:8000;
-    }
-}
-```
+Before contributing, please read [CONTRIBUTING.md](CONTRIBUTING.md) *(coming soon)*.
 
-Do not send passwords over plain HTTP: enable HTTPS before allowing remote access. Use your platform's secret/environment management for the backend. Set `CORS_ORIGINS` to the actual frontend origin when cross-origin access is required; same-origin reverse proxying is preferred.
+---
 
-Typical service command, with environment values injected by the service manager:
+## 📄 License
 
-```bash
-cd /opt/new-ai-data/services/agent
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
-```
+License is **to be determined** before official release, pending a full review of all third-party dependencies. See [LICENSE](LICENSE) *(coming soon)*.
 
-## Verification and troubleshooting
+---
 
-```bash
-curl --fail http://127.0.0.1:8000/health
+## 🏢 About
 
-cd apps/web
-npm run typecheck
-npm run build
-```
+Built by **Weino Technology (微诺科技)**. The project grows out of real commerce, property, and membership systems — designed so that business teams can finally ask their own data questions, safely.
 
-- **Chat unavailable:** verify datasource enablement, a nonempty object/column allowlist, all three LLM settings and database access. Do not print the full environment when diagnosing.
-- **TLS connection fails:** check the CA path, certificate trust and hostname. Correct the configuration; do not disable verification to work around a failed certificate check.
-- **Model unavailable / timeout:** verify provider availability, model tool support and network access. Defaults are `LLM_TIMEOUT_SECONDS=90`, `AGENT_REQUEST_TIMEOUT_SECONDS=150`, `MAX_TOOL_CALLS=8`. Reverse-proxy deadlines must accommodate the request budget.
-- **SQL policy blocked:** the query may reference unapproved fields, unsupported functions or joins. Rephrase within the supported scope; do not broaden permissions merely to make a demonstration succeed.
-- **No results:** check the actual data's date range. Use explicit absolute dates for reproducible demonstrations.
-- **Frontend works but API fails after deployment:** ensure your production server proxies both `/api/` and `/health`; frontend requests use relative URLs.
-- **SQLite write failure:** check the service working directory, directory permissions and configured path.
-
-## Current limitations
-
-- One configured datasource; single-table queries. JOIN, CTE, subqueries, writes and arbitrary SQL submission are unsupported.
-- Complex relative-date exclusions/comparisons are not reliably interpreted. Use explicit absolute ranges, or clarify the requested scope before relying on a result.
-- Record counts do not establish unique customer/order counts. Currency and net-revenue rules require business confirmation; the application does not infer them from field names.
-- The query normally returns at most 200 rows, the model normally receives at most 50 rows, and a chart shows at most 200 rows. These are separate limits. Ask for a server-side aggregate rather than summing a partial sample.
-- One chart per reply, from the most recent successful query. Large or imprecise numeric values may fall back to a lossless table.
-- Model responses and latency can vary; a successful SQL query does not guarantee the provider's final response will succeed.
-- This public distribution omits internal tests, evaluation tooling and customer-specific import scripts. Source configuration may still contain optional development/test script entries; those internal suites are not shipped here.
-
-## Roadmap and contributing
-
-Planned work includes reusable domain Skills, additional datasource adapters, enterprise identity and tenant integration, richer auditing, and container/desktop packaging. These are roadmap items, not capabilities of the current deployment snapshot.
-
-Issues and pull requests are welcome, particularly for datasource adapters, domain semantics and query-safety improvements. Contribution guidelines will be added by the maintainers; this distribution does not include a separate contributing guide.
-
-## License and project background
-
-As stated in the upstream project introduction, the license is to be determined by the maintainers before official release, including review of third-party dependencies. No project license grant is asserted by this snapshot.
-
-The upstream project introduction credits **Weino Technology (微诺科技)** and describes its origin in commerce, property and membership systems. This README retains that attribution while documenting the behavior implemented in this source distribution.
+> North Star reminder: build the Phase 1 loop well — real schema, safe queries, honest answers.
