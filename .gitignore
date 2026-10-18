@@ -1,0 +1,39 @@
+# ---- 依赖 ----
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+
+# ---- 构建产物 ----
+dist/
+build/
+coverage/
+htmlcov/
+*.tsbuildinfo
+
+# ---- 测试与覆盖率报告 ----
+.pytest_cache/
+.coverage
+.coverage.*
+test-results/
+playwright-report/
+
+# ---- 环境变量与凭据（只提交 .env.example）----
+.env
+.env.*
+!.env.example
+
+# ---- 运行时数据（未来 SQLite 会话等）----
+data/
+
+# ---- 用户提供的私人测试数据（不提交原始工作簿）----
+/测试数据/
+
+# ---- 本地隔离 MySQL 数据卷、TLS 私钥、导入报告与拒绝记录（Task 003）----
+.local/
+
+# ---- IDE / 系统 ----
+.DS_Store
+.idea/
+.vscode/
+*.log
