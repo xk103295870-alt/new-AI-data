@@ -30,6 +30,8 @@ from app.query.service import build_query_service
 from app.routes.chat import router as chat_router
 from app.routes.datasources import router as datasources_router
 from app.routes.health import router as health_router
+from app.routes.settings import router as settings_router
+from app.runtime_settings import RuntimeSettingsStore, apply_runtime_overrides
 from app.schema.cache import TTLCache
 from app.schema.service import SchemaService
 from app.session.store import SQLiteSessionStore
@@ -107,6 +109,7 @@ def _build_agent(
             model=config.llm_model,
             timeout_seconds=config.llm_timeout_seconds,
             max_tokens=config.llm_max_tokens,
+            temperature=config.llm_temperature,
         )
 
     if session_store is None:
@@ -167,6 +170,9 @@ def create_app(
         已挂载健康检查、数据源、聊天路由、CORS、请求 ID 中间件与异常处理的应用。
     """
     settings = settings or Settings()
+    # 运行时设置（设置 API 持久化）覆盖环境变量默认值，使管理员可在界面换模型/数据源。
+    runtime_store = RuntimeSettingsStore.from_session_db_path(settings.session_db_path)
+    settings = apply_runtime_overrides(settings, runtime_store.load())
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -203,12 +209,45 @@ def create_app(
         )
     app.state.agent_runner = agent_runner
     app.state.session_store = session_store
+    app.state.runtime_store = runtime_store
+    app.state.adapter_factory = adapter_factory
+
+    async def rebuild_runtime() -> None:
+        """按当前 app.state.settings 整体重建 注册表→查询服务→Agent。
+
+        设置 API 保存新配置后调用；旧组件按 runner→query_service→registry 顺序
+        异步释放，释放失败只告警不阻断新链路上线。会话存储跨重建复用。
+        """
+        current: Settings = app.state.settings
+        for attr in ("agent_runner", "query_service", "registry"):
+            obj = getattr(app.state, attr, None)
+            setattr(app.state, attr, None)
+            if obj is None:
+                continue
+            try:
+                await obj.close()
+            except Exception:
+                logger.warning("runtime rebuild: close failed for %s", attr)
+        app.state.registry = _build_registry(current, adapter_factory)
+        app.state.query_service = _build_query_service(current, app.state.registry)
+        runner, new_store = _build_agent(
+            current,
+            app.state.registry,
+            app.state.query_service,
+            None,
+            app.state.session_store,
+        )
+        app.state.agent_runner = runner
+        if new_store is not None:
+            app.state.session_store = new_store
+
+    app.state.rebuild_runtime = rebuild_runtime
 
     # CORS 边界：仅允许明确的本地开发来源，不使用通配符，不开启凭据共享。
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origin_list,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PUT"],
         allow_headers=["Content-Type"],
         allow_credentials=False,
     )
@@ -255,6 +294,7 @@ def create_app(
         )
 
     app.include_router(health_router)
+    app.include_router(settings_router)
     app.include_router(datasources_router)
     app.include_router(chat_router)
     return app

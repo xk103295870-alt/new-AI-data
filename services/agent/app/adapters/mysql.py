@@ -70,6 +70,24 @@ _KEY_USAGE_SQL = (
     "ORDER BY TABLE_NAME, CONSTRAINT_NAME, ORDINAL_POSITION"
 )
 _CONNECTION_CHECK_SQL = "SELECT 1"
+# 倒表发现：全库对象与列清单（固定 information_schema，参数绑定 schema）；
+# 仅供设置 API 让管理员挑选授权白名单，不涉及业务数据行。
+_DISCOVER_TABLES_SQL = (
+    "SELECT TABLE_NAME, TABLE_TYPE, TABLE_COMMENT "
+    "FROM information_schema.TABLES "
+    "WHERE TABLE_SCHEMA = %s "
+    "AND TABLE_TYPE IN ('BASE TABLE', 'VIEW') "
+    "ORDER BY TABLE_NAME"
+)
+_DISCOVER_COLUMNS_SQL = (
+    "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, IS_NULLABLE, COLUMN_COMMENT, ORDINAL_POSITION "
+    "FROM information_schema.COLUMNS "
+    "WHERE TABLE_SCHEMA = %s "
+    "ORDER BY TABLE_NAME, ORDINAL_POSITION"
+)
+# 倒表发现的规模上限：超出即截断并标记 truncated，防止超大库表清单撑爆响应。
+_DISCOVER_MAX_OBJECTS = 500
+_DISCOVER_MAX_COLUMNS = 5000
 
 
 def _in_placeholders(count: int) -> str:
@@ -121,6 +139,45 @@ class DirectMySQLAdapter:
             return RawMetadata(tables=tables, columns=columns, constraints=constraints, key_usage=key_usage)
         finally:
             await self._close_connection(conn)
+
+    async def discover_objects(self) -> tuple[list[dict[str, Any]], bool]:
+        """发现库内全部表/视图及其列（倒表）；返回 (对象清单, 是否截断)。
+
+        清单仅用于设置界面挑选授权白名单；超出规模上限时截断并标记，
+        不读取任何业务数据行。对象/列结构为：
+        {name, kind, comment, columns: [{name, data_type, nullable, comment}]}。
+        """
+        conn = await self._connect()
+        try:
+            table_rows = await self._fetch(conn, _DISCOVER_TABLES_SQL, (self._config.database,))
+            column_rows = await self._fetch(conn, _DISCOVER_COLUMNS_SQL, (self._config.database,))
+        finally:
+            await self._close_connection(conn)
+
+        truncated = len(table_rows) > _DISCOVER_MAX_OBJECTS or len(column_rows) > _DISCOVER_MAX_COLUMNS
+        table_rows = table_rows[:_DISCOVER_MAX_OBJECTS]
+        column_rows = column_rows[:_DISCOVER_MAX_COLUMNS]
+
+        columns_by_table: dict[str, list[dict[str, Any]]] = {}
+        for row in column_rows:
+            entry = {
+                "name": row.get("COLUMN_NAME", ""),
+                "data_type": row.get("DATA_TYPE", ""),
+                "nullable": row.get("IS_NULLABLE") == "YES",
+                "comment": row.get("COLUMN_COMMENT", "") or "",
+            }
+            columns_by_table.setdefault(row.get("TABLE_NAME", ""), []).append(entry)
+
+        objects: list[dict[str, Any]] = []
+        for row in table_rows:
+            name = row.get("TABLE_NAME", "")
+            objects.append({
+                "name": name,
+                "kind": "view" if row.get("TABLE_TYPE") == "VIEW" else "table",
+                "comment": row.get("TABLE_COMMENT", "") or "",
+                "columns": columns_by_table.get(name, []),
+            })
+        return objects, truncated
 
     async def close(self) -> None:
         """生命周期钩子；本适配器每操作即开即关，无长驻连接，故为空实现。"""

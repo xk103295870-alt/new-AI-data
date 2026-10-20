@@ -152,6 +152,63 @@ const en = {
   'chart.title.compare': '{y} by {x}',
   'chart.title.share': '{y} share by {x}',
   'chart.title.table': 'Query result',
+  'app.settings': 'Settings',
+
+  'settings.title': 'System settings',
+  'settings.tabLlm': 'LLM',
+  'settings.tabDatasource': 'Datasource',
+  'settings.field.baseUrl': 'Base URL',
+  'settings.field.apiKey': 'API key',
+  'settings.field.model': 'Model',
+  'settings.field.timeout': 'Timeout (seconds)',
+  'settings.field.maxTokens': 'Max tokens',
+  'settings.field.temperature': 'Temperature',
+  'settings.field.enabled': 'Enable datasource',
+  'settings.field.name': 'Datasource name',
+  'settings.field.host': 'Host',
+  'settings.field.port': 'Port',
+  'settings.field.database': 'Database',
+  'settings.field.user': 'User',
+  'settings.field.password': 'Password',
+  'settings.field.ssl': 'Enable SSL',
+  'settings.secretSaved': 'Saved. Leave empty to keep it unchanged',
+  'settings.test': 'Test connection',
+  'settings.save': 'Save',
+  'settings.testing': 'Testing\u2026',
+  'settings.saving': 'Saving\u2026',
+  'settings.saved': 'Settings saved',
+  'settings.loadFailed': 'Failed to load settings',
+  'settings.testSuccess': 'Connection succeeded ({ms} ms)',
+  'settings.testFailed': 'Connection failed: {reason}',
+  'settings.request.timeout': 'Settings request timed out',
+  'settings.request.network': 'Cannot connect to backend service',
+  'settings.request.invalid-response': 'Backend returned an unrecognized settings response',
+  'settings.request.http': 'Settings service temporarily unavailable',
+  'settings.llmTestError.config-invalid': 'LLM configuration is incomplete or invalid',
+  'settings.llmTestError.timeout': 'LLM request timed out',
+  'settings.llmTestError.unauthorized': 'The API key was rejected (unauthorized)',
+  'settings.llmTestError.http-error': 'The LLM service returned an HTTP error',
+  'settings.llmTestError.network': 'Cannot reach the LLM service',
+  'settings.llmTestError.invalid-response': 'The LLM service returned an unrecognized response',
+  'settings.llmTestError.unknown': 'LLM connection failed',
+  'settings.dsTestError.config-invalid': 'Datasource configuration is incomplete or invalid',
+  'settings.dsTestError.timeout': 'Datasource connection timed out',
+  'settings.dsTestError.auth': 'Database authentication failed; check user and password',
+  'settings.dsTestError.tls': 'TLS/SSL handshake failed; check SSL settings',
+  'settings.dsTestError.unavailable': 'Database is unreachable; check host and port',
+  'settings.dsTestError.unknown': 'Datasource connection failed',
+  'settings.discoverTitle': 'Import authorized tables',
+  'settings.loadTables': 'Load database tables',
+  'settings.loadingTables': 'Loading tables\u2026',
+  'settings.loadTablesFailed': 'Failed to load database tables',
+  'settings.tablesEmpty': 'No tables found in the database',
+  'settings.selectAll': 'Select all',
+  'settings.clearAll': 'Clear',
+  'settings.importSelected': 'Import selected tables',
+  'settings.noTablesSelected': 'Select at least one table to import',
+  'settings.columns': '{n} columns',
+  'settings.allowedSummary': 'Authorized objects ({count}):',
+  'settings.allowedItem': '{name} ({cols})',
 } as const
 
 export type MessageKey = keyof typeof en
@@ -284,6 +341,63 @@ const zh: Record<MessageKey, string> = {
   'chart.title.compare': '{y} 按 {x} 对比',
   'chart.title.share': '{y} 按 {x} 占比',
   'chart.title.table': '查询结果',
+  'app.settings': '设置',
+
+  'settings.title': '系统设置',
+  'settings.tabLlm': 'LLM 设置',
+  'settings.tabDatasource': '数据源设置',
+  'settings.field.baseUrl': 'Base URL',
+  'settings.field.apiKey': 'API 密钥',
+  'settings.field.model': '模型',
+  'settings.field.timeout': '超时时间（秒）',
+  'settings.field.maxTokens': '最大 token 数',
+  'settings.field.temperature': 'Temperature',
+  'settings.field.enabled': '启用数据源',
+  'settings.field.name': '数据源名称',
+  'settings.field.host': '主机地址',
+  'settings.field.port': '端口',
+  'settings.field.database': '数据库',
+  'settings.field.user': '用户名',
+  'settings.field.password': '密码',
+  'settings.field.ssl': '启用 SSL',
+  'settings.secretSaved': '密钥已保存，留空则不修改',
+  'settings.test': '测试连接',
+  'settings.save': '保存',
+  'settings.testing': '正在测试\u2026',
+  'settings.saving': '正在保存\u2026',
+  'settings.saved': '设置已保存',
+  'settings.loadFailed': '加载设置失败',
+  'settings.testSuccess': '连接成功（{ms} 毫秒）',
+  'settings.testFailed': '连接失败：{reason}',
+  'settings.request.timeout': '设置请求超时',
+  'settings.request.network': '无法连接后端服务',
+  'settings.request.invalid-response': '后端返回了无法识别的设置响应',
+  'settings.request.http': '设置服务暂不可用',
+  'settings.llmTestError.config-invalid': 'LLM 配置不完整或不合法',
+  'settings.llmTestError.timeout': 'LLM 请求超时',
+  'settings.llmTestError.unauthorized': 'API 密钥被拒绝（未授权）',
+  'settings.llmTestError.http-error': 'LLM 服务返回 HTTP 错误',
+  'settings.llmTestError.network': '无法连接到 LLM 服务',
+  'settings.llmTestError.invalid-response': 'LLM 服务返回了无法识别的响应',
+  'settings.llmTestError.unknown': 'LLM 连接失败',
+  'settings.dsTestError.config-invalid': '数据源配置不完整或不合法',
+  'settings.dsTestError.timeout': '数据源连接超时',
+  'settings.dsTestError.auth': '数据库认证失败，请检查用户名和密码',
+  'settings.dsTestError.tls': 'TLS/SSL 握手失败，请检查 SSL 设置',
+  'settings.dsTestError.unavailable': '数据库无法连接，请检查主机和端口',
+  'settings.dsTestError.unknown': '数据源连接失败',
+  'settings.discoverTitle': '导入授权表（倒表）',
+  'settings.loadTables': '加载数据库表',
+  'settings.loadingTables': '正在加载数据库表\u2026',
+  'settings.loadTablesFailed': '加载数据库表失败',
+  'settings.tablesEmpty': '数据库中没有发现表',
+  'settings.selectAll': '全选',
+  'settings.clearAll': '清空',
+  'settings.importSelected': '导入所选表',
+  'settings.noTablesSelected': '请先勾选要导入的表',
+  'settings.columns': '{n} 列',
+  'settings.allowedSummary': '已授权对象（共 {count} 个）：',
+  'settings.allowedItem': '{name}（{cols}）',
 }
 
 const messages: Record<Locale, Record<MessageKey, string>> = { en, zh }
@@ -374,6 +488,24 @@ export function serviceErrorText(kind: string): string {
 export function datasourceErrorText(kind: string): string {
   const key = `datasource.${kind === 'invalid-response' ? 'invalidResponse' : kind}` as MessageKey
   return key in en ? translate(key) : translate('datasource.unknown')
+}
+
+/** 设置请求失败的本地化文案。 */
+export function settingsErrorText(kind: string): string {
+  const key = `settings.request.${kind}` as MessageKey
+  return key in en ? translate(key) : translate('settings.request.http')
+}
+
+/** LLM 连接测试失败按稳定 error code 本地化；未知 code 用通用提示，不回显后端原文。 */
+export function llmTestErrorText(code: string | null | undefined): string {
+  const key = `settings.llmTestError.${code ?? 'unknown'}` as MessageKey
+  return key in en ? translate(key) : translate('settings.llmTestError.unknown')
+}
+
+/** 数据源连接测试失败按稳定 error code 本地化；未知 code 用通用提示，不回显后端原文。 */
+export function dsTestErrorText(code: string | null | undefined): string {
+  const key = `settings.dsTestError.${code ?? 'unknown'}` as MessageKey
+  return key in en ? translate(key) : translate('settings.dsTestError.unknown')
 }
 
 /**

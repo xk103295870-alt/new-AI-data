@@ -5,6 +5,7 @@ import { onMounted, ref } from 'vue'
 import ServiceStatus from '@/components/ServiceStatus.vue'
 import DataSourceStatus from '@/components/DataSourceStatus.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
+import SettingsDialog from '@/components/SettingsDialog.vue'
 import { useServiceStatus } from '@/composables/useServiceStatus'
 import { locale, setLocale, translate, type Locale } from '@/i18n'
 
@@ -12,6 +13,18 @@ const { state, message, check } = useServiceStatus()
 onMounted(check)
 
 const chatPanel = ref<InstanceType<typeof ChatPanel> | null>(null)
+
+const settingsVisible = ref(false)
+// 数据源保存成功后递增强制重挂 DataSourceStatus，触发其 onMounted 重新加载状态。
+const datasourceStatusKey = ref(0)
+
+function openSettings(): void {
+  settingsVisible.value = true
+}
+
+function onSettingsSaved(): void {
+  datasourceStatusKey.value += 1
+}
 
 /** 新建对话：清空消息与会话 ID；在途请求期间由 ChatPanel 自行忽略。 */
 function newConversation(): void {
@@ -29,6 +42,9 @@ function chooseLocale(next: Locale): void {
     <el-header class="app-header">
       <h1 class="app-title">{{ translate('app.title') }}</h1>
       <ServiceStatus :state="state" :message="message" />
+      <el-button class="settings-button" size="small" @click="openSettings">
+        {{ translate('app.settings') }}
+      </el-button>
       <div class="locale-switcher" role="group" :aria-label="translate('locale.label')">
         <button
           type="button"
@@ -56,10 +72,11 @@ function chooseLocale(next: Locale): void {
         <!-- Skill 尚未实现，本阶段隐藏，不展示为可用。 -->
       </el-aside>
       <el-main class="app-main">
-        <DataSourceStatus />
+        <DataSourceStatus :key="datasourceStatusKey" />
         <ChatPanel ref="chatPanel" />
       </el-main>
     </el-container>
+    <SettingsDialog v-model="settingsVisible" @saved="onSettingsSaved" />
   </el-container>
 </template>
 
@@ -111,6 +128,9 @@ function chooseLocale(next: Locale): void {
 .app-aside {
   border-right: 1px solid var(--el-border-color);
   padding: 16px;
+}
+.settings-button {
+  margin-left: auto;
 }
 .app-main {
   display: flex;

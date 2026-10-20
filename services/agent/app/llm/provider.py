@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
@@ -139,6 +140,7 @@ class OpenAICompatibleProvider:
         model: str,
         timeout_seconds: float = 30.0,
         max_tokens: int = 1024,
+        temperature: float = 0.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         parsed_scheme = base_url.split(":", 1)[0].lower() if base_url else ""
@@ -151,12 +153,16 @@ class OpenAICompatibleProvider:
             raise ValueError("missing llm model")
         if not (timeout_seconds > 0) or not (max_tokens > 0):
             raise ValueError("invalid llm limits")
+        # OpenAI 兼容端点的采样温度合法域为 [0, 2]；超出视为配置非法。
+        if not (0.0 <= temperature <= 2.0):
+            raise ValueError("invalid llm temperature")
 
         self._base_url = base_url.rstrip("/")
         self._api_key = SecretStr(key)
         self._model = model.strip()
         self._timeout = timeout_seconds
         self._max_tokens = max_tokens
+        self._temperature = temperature
         self._transport = transport
 
     async def generate(
@@ -176,7 +182,7 @@ class OpenAICompatibleProvider:
         body: dict[str, Any] = {
             "model": self._model,
             "messages": list(messages),
-            "temperature": 0,
+            "temperature": self._temperature,
             "max_tokens": self._max_tokens,
         }
         if tools:
@@ -219,3 +225,80 @@ class OpenAICompatibleProvider:
     def __repr__(self) -> str:
         """避免调试输出意外带出密钥。"""
         return f"OpenAICompatibleProvider(model={self._model!r})"
+
+
+# ---- 连接探测（设置 API 的“测试连接”使用） ----
+# 错误分类为固定枚举字符串，绝不携带密钥、URL 或供应商响应原文。
+LLM_PROBE_ERRORS = (
+    "config-invalid",
+    "timeout",
+    "unauthorized",
+    "http-error",
+    "network",
+    "invalid-response",
+)
+
+
+async def probe_llm_endpoint(
+    *,
+    base_url: str,
+    api_key: SecretStr | str,
+    model: str,
+    timeout_seconds: float = 20.0,
+    temperature: float = 0.0,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> tuple[bool, int | None, str | None]:
+    """以最小请求（max_tokens=1）验证 LLM 端点连通性与鉴权。
+
+    返回 (ok, latency_ms, error)；ok=True 时 error 为 None。
+    只做一次调用、不重试；密钥只进入请求头，不进入返回值与异常文案。
+    """
+    try:
+        provider = OpenAICompatibleProvider(
+            base_url=base_url,
+            api_key=api_key,
+            model=model,
+            timeout_seconds=timeout_seconds,
+            max_tokens=1,
+            temperature=temperature,
+            transport=transport,
+        )
+    except ValueError:
+        return False, None, "config-invalid"
+
+    key = api_key.get_secret_value() if isinstance(api_key, SecretStr) else api_key
+    url = f"{provider._base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    body = {
+        "model": provider._model,
+        "messages": [{"role": "user", "content": "ping"}],
+        "max_tokens": 1,
+        "temperature": provider._temperature,
+    }
+
+    started = time.perf_counter()
+    try:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(provider._timeout),
+            transport=transport,
+        ) as client:
+            response = await client.post(url, headers=headers, json=body)
+    except httpx.TimeoutException:
+        return False, None, "timeout"
+    except httpx.HTTPError:
+        return False, None, "network"
+    latency_ms = int((time.perf_counter() - started) * 1000)
+
+    if response.status_code in (401, 403):
+        return False, latency_ms, "unauthorized"
+    if response.status_code < 200 or response.status_code >= 300:
+        return False, latency_ms, "http-error"
+
+    try:
+        payload = response.json()
+    except (ValueError, json.JSONDecodeError):
+        return False, latency_ms, "invalid-response"
+    choices = payload.get("choices")
+    if not isinstance(choices, list) or not choices:
+        return False, latency_ms, "invalid-response"
+    return True, latency_ms, None

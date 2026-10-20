@@ -69,6 +69,8 @@ class Settings(BaseSettings):
     # gemini-4-argon 单轮完整分析实测 34–47s，偶发单次 19s+，默认留出足够余量。
     llm_timeout_seconds: float = 90.0
     llm_max_tokens: int = 1024
+    # 采样温度；数据分析要求确定性结论，默认 0（贪婪解码）。
+    llm_temperature: float = 0.0
 
     # 整体分析预算必须覆盖单次模型调用；实测简单问题需 4 次工具调用，默认放宽到 8 次。
     agent_request_timeout_seconds: float = 150.0

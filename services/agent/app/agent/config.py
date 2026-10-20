@@ -19,6 +19,7 @@ from app.config import Settings
 _MAX_LLM_TIMEOUT_SECONDS = 120.0
 _MAX_REQUEST_TIMEOUT_SECONDS = 300.0
 _MAX_LLM_TOKENS = 8192
+_MAX_LLM_TEMPERATURE = 2.0
 _MAX_TOOL_CALLS = 10
 _MAX_SQL_RETRIES = 3
 _MAX_TOOL_RESULT_ROWS = 1000
@@ -38,6 +39,7 @@ class AgentConfig:
     llm_model: str
     llm_timeout_seconds: float
     llm_max_tokens: int
+    llm_temperature: float
     request_timeout_seconds: float
     max_tool_calls: int
     sql_auto_retry_max: int
@@ -99,6 +101,9 @@ class AgentConfig:
 
         if not 1 <= settings.llm_max_tokens <= _MAX_LLM_TOKENS:
             raise AgentConfigError("LLM 最大 token 数超出合法范围")
+        temperature = settings.llm_temperature
+        if not (math.isfinite(temperature) and 0.0 <= temperature <= _MAX_LLM_TEMPERATURE):
+            raise AgentConfigError("LLM 采样温度超出合法范围")
         if not 1 <= settings.max_tool_calls <= _MAX_TOOL_CALLS:
             raise AgentConfigError("工具调用次数上限超出合法范围")
         if not 0 <= settings.sql_auto_retry_max <= _MAX_SQL_RETRIES:
@@ -124,6 +129,7 @@ class AgentConfig:
             llm_model=model,
             llm_timeout_seconds=llm_timeout,
             llm_max_tokens=settings.llm_max_tokens,
+            llm_temperature=temperature,
             request_timeout_seconds=request_timeout,
             max_tool_calls=settings.max_tool_calls,
             sql_auto_retry_max=settings.sql_auto_retry_max,

@@ -16,6 +16,8 @@ The core idea: **trusted data access + AI analysis orchestration + business sema
 - 🔒 **Security by design** — read-only SQL, object whitelists, tenant isolation, resource limits, and full audit logging. The model never holds database credentials.
 - 🏢 **Enterprise integration** — a Java Business Adapter reuses existing identity, tenant, and business APIs from legacy systems; no rewrite required.
 - ☁️ **Model flexibility** — third-party LLM APIs by default, with an open interface for enterprise-chosen providers or local inference.
+- ⚙️ **Runtime settings UI** — configure the LLM endpoint (base URL, key, model, timeout, max tokens, temperature) and the data source (MySQL connection + authorized table/column whitelist) from the admin settings dialog; test connections and import tables (倒表) without restarting.
+- 💾 **Settings persistence** — runtime settings are saved server-side (`data/runtime_settings.json`, mode 600) and override env defaults on next boot; secrets are never echoed back to the browser.
 
 ---
 
@@ -86,6 +88,7 @@ npm run dev
 4. **Constrained queries** — read-only SQL, object whitelists, scan/time/row limits, and audit logging; SQL AST checks are one layer of many.
 5. **Schema minimization** — sensitive business knowledge is filtered before any third-party model call; masked or aggregated data only.
 6. **Explainable results** — metric definitions, reasoning, sources, and limitations are always shown; the system never fabricates metrics, data, or table structures.
+7. **Runtime settings** — the admin settings API (`/api/v1/settings`) validates every input with the same rules as boot-time config (fixed, sanitized error messages), persists to a 600-permission JSON file, rebuilds the data/Agent pipeline on save, and returns only masked snapshots (`api_key_set` / `password_set` booleans). Table discovery (倒表) reads only `information_schema`, never business rows.
 
 ---
 
